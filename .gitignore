@@ -1,0 +1,31 @@
+# environment
+#.env
+
+# node
+moderator/node_modules/
+moderator/dist/
+
+# python
+training/__pycache__/
+training/*.pyc
+training/output/
+training/.venv/
+__pycache__/
+*.pyc
+*.pyo
+venv/
+
+# corpus (large files — archive separately)
+corpus/*.jsonl
+corpus/sessions/*.partial.json
+corpus/archive/
+
+# training output
+training/output/
+
+# os
+.DS_Store
+
+node_modules/
+.claude/
+qwen*/

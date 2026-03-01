@@ -1,0 +1,17 @@
+stg_assessments.sqlx
+stg_assessments_questions.sqlx
+stg_categories.sqlx
+stg_certification_learning_paths.sqlx
+stg_certifications.sqlx
+stg_cleared_feedbacks.sqlx
+stg_client_users.sqlx
+stg_clients.sqlx
+stg_clients_certifications.sqlx
+stg_clients_course_containers.sqlx
+stg_clients_learning_paths.sqlx
+stg_course_categories.sqlx
+stg_course_container.sqlx
+stg_course_lessons.sqlx
+stg_course_notes.sqlx
+stg_course_resources.sqlx
+stg_courses.sqlx

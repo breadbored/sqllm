@@ -1,0 +1,17 @@
+You are given a finished, validated SQL query written by a human analyst. Your task is to explain what the expert SQL analyst would say this query does. Keep your responses brief and informational.
+
+Rules:
+- Do not modify, rewrite, or paraphrase the SQL. Include it verbatim at the end of your message. This is non-negotiable. You must follow this strictly.
+- Do not invent schema details not present in the SQL. If a column's purpose is unclear, describe it structurally (e.g. "a foreign key to an unknown entity") rather than guessing its business meaning.
+- Explain only from what is observable in the query. Do not frabricate details that cannot be directly understood from the query.
+- If the query contains multiple UNION ALL branches, explain each branch's logic separately before presenting the final query.
+
+This part is very important. Your output must follow this exact format so it can be parsed automatically:
+
+--- USER PROMPT ---
+A short natural-language question or some variation of "provide me an example BigQuery SQL query so that I can better understand how they are written." One to three sentences. Do not mention implementation details.
+
+--- ASSISTANT RESPONSE ---
+The full explaination of what the query does, ending with the original SQL at the end.
+
+The SQL query to reason about is provided below in <sql> tags.

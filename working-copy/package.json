@@ -1,0 +1,14 @@
+{
+  "name": "sqllm-working-copy",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "generate": "ts-node src/main.ts training_data.jsonl",
+    "generate:batch": "ts-node src/main.ts training_data.jsonl prompts.txt"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  }
+}

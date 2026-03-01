@@ -1,0 +1,58 @@
+# CUDA fork — Qwen2.5-Coder-7B with 4-bit QLoRA (bfloat16 compute).
+# Production ROCm run uses Qwen3.5-27B with QLoRA (see ../training/).
+#
+# Memory budget on a rented GPU (e.g. A10 24 GB, A100 40/80 GB, RTX 4090 24 GB):
+#   7B weights (4-bit NF4):  ~3.5 GB
+#   LoRA adapters + opt:     ~0.5 GB
+#   Activations (seq 4096):  ~3-5 GB
+#   Total:                   ~7-9 GB
+# Fits on any modern CUDA GPU with >= 16 GB VRAM.
+#
+# To use a larger model, change model_name:
+#   Qwen/Qwen2.5-Coder-12B  (~6 GB 4-bit, fits 16 GB VRAM)
+#   Qwen/Qwen2.5-Coder-32B  (~16 GB 4-bit, fits 40 GB VRAM)
+
+model_name: Qwen/Qwen2.5-Coder-7B
+data_path: data/training_data.jsonl
+output_dir: output/qwen25-7b-sqllm-cuda
+
+# 4-bit QLoRA — base model frozen at 4-bit, LoRA adapters train in bf16.
+load_in_4bit: true
+
+# lora settings
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+
+# training settings
+max_seq_length: 4096
+per_device_train_batch_size: 1
+per_device_eval_batch_size: 1  # eval logits are [batch × seq_len × vocab_size] — keep at 1
+gradient_accumulation_steps: 8
+
+# Epochs
+num_train_epochs: 5 # for low sample counts
+# num_train_epochs: 3 # for high sample counts
+
+# Learning Rate
+learning_rate: 2.0e-4 # standard for QLoRA
+# learning_rate: 5.0e-5 # conservative
+
+warmup_ratio: 0.05
+lr_scheduler_type: cosine
+save_steps: 50
+logging_steps: 10
+bf16: true  # bfloat16 supported on Ampere+ (A100, A10, RTX 30xx/40xx)
+fp16: false # use bf16 instead — more numerically stable
+gradient_checkpointing: true # trade ~30% compute for ~half activation memory
+
+# eval split — held out from training, used for loss monitoring
+eval_split: 0.1

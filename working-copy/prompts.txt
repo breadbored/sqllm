@@ -1,0 +1,45 @@
+# SQLLM seed prompts — one per line, # for comments, blank lines ignored
+# Problem categories: aggregation, anti-join, set, temporal, hierarchy, schema, optimization, pattern
+# Add new prompts here rather than retyping in interactive mode
+
+# --- aggregation.granularity_collapse ---
+Given a table user_course_lesson_progress(user_id, course_id, lesson_id, progress_seconds, created), get total progress in seconds per user per course. Progress events are recorded continuously — many rows exist per lesson per user. Progress should reflect the furthest point reached in each lesson, not the sum of all events.
+
+Given a table page_events(person_id, session_id, page_id, created), calculate total time each person spent in the app. Time on a page is max(created) - min(created) for that page. Time in a session is the sum of page times. Total person time is the sum of session times.
+
+# --- aggregation.multi_level ---
+Given orders(order_id, customer_id, store_id, region_id, amount, created_at), calculate the average order value per region per month, where average is computed over store totals (not individual orders). Each store's monthly total feeds into the regional average.
+
+# --- set.anti_join ---
+Given tables users(id, email, created_at) and orders(id, user_id, created_at), find all users who registered more than 30 days ago but have never placed an order.
+
+Given tables courses(id, name) and enrollments(id, user_id, course_id, enrolled_at), find courses that have never had any enrollments.
+
+# --- set.difference ---
+Given last_month_active_users(user_id) and this_month_active_users(user_id), find users who were active last month but not this month (churned users).
+
+# --- temporal.window ---
+Given a table login_events(user_id, logged_in_at), for each user calculate the number of days since their previous login at the time of each login event.
+
+Given orders(order_id, customer_id, amount, created_at), calculate a 7-day rolling sum of revenue per day.
+
+# --- temporal.running ---
+Given donations(id, donor_id, campaign_id, amount, donated_at), for each campaign show a running total of donations ordered by donation time, alongside each individual donation row.
+
+# --- temporal.gap ---
+Given subscriptions(user_id, starts_at, ends_at), identify users who had a gap in coverage — periods where they had no active subscription between two subscription windows.
+
+# --- hierarchy.recursive ---
+Given employees(id, name, manager_id), for each employee find all their direct and indirect reports (the full subtree beneath them in the org chart).
+
+# --- pattern.deduplication ---
+Given a table contact_submissions(id, email, name, message, submitted_at) where the same person may have submitted the form multiple times, return only the most recent submission per email address.
+
+# --- pattern.pivot ---
+Given a table survey_responses(respondent_id, question_id, answer) with question_ids 1 through 5, produce one row per respondent with columns answer_1 through answer_5.
+
+# --- optimization.rewrite ---
+Given a query that uses a correlated subquery to find the latest order for each customer, rewrite it using window functions to improve performance. Table: orders(order_id, customer_id, amount, created_at).
+
+# --- schema.smell ---
+Given a table user_settings(user_id, setting_name, setting_value) where setting_name is a freeform string, a developer wants to sum all numeric setting values per user. Identify the schema problem and explain what the correct schema should be before writing any query.

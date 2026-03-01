@@ -1,0 +1,677 @@
+# SQLLM — Project Reference for Claude Code
+
+## Project Overview
+
+SQLLM is a focused LLM fine-tuning system designed to produce a model that reasons about SQL the way an expert SQL developer does — not just generating syntactically valid SQL, but understanding granularity, query shape, intermediate data structures, and transformation strategy before writing a single keyword.
+
+The system has two phases:
+
+1. **Data collection** — a terminal-based moderation workflow where a human expert (the moderator) intervenes in multi-turn inference sessions to elicit and validate SQL reasoning traces, storing them as a structured JSONL corpus.
+2. **Training** — a Python-based LoRA fine-tuning pipeline that consumes the corpus and refines a base model using PyTorch + PEFT.
+
+There is no web UI and no HTTP API. All tooling is terminal-native. This is intentional — the workflow is designed to run across multiple terminal windows simultaneously.
+
+---
+
+## Architecture
+
+```
+sqllm/
+├── CLAUDE.md                  # this file
+├── README.md
+├── .env.example
+│
+├── moderator/                 # typescript cli for moderation sessions
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── src/
+│       ├── index.ts           # cli entrypoint
+│       ├── session.ts         # manages a single moderation session
+│       ├── ollama.ts          # ollama http client
+│       ├── corpus.ts          # jsonl read/write
+│       ├── prompt.ts          # prompt templates and turn construction
+│       └── types.ts           # shared types
+│
+├── corpus/                    # jsonl training records (gitignored if large)
+│   ├── .gitkeep
+│   └── *.jsonl
+│
+├── problems/                  # input problem/schema definitions
+│   ├── .gitkeep
+│   └── *.json
+│
+└── training/                  # python fine-tuning pipeline
+    ├── requirements.txt
+    ├── train.py               # main training entrypoint
+    ├── evaluate.py            # eval against held-out test set
+    ├── corpus_utils.py        # jsonl loading, splitting, validation
+    └── config/
+        ├── default.yaml       # default training hyperparameters
+        └── qwen_12b.yaml      # model-specific overrides
+```
+
+---
+
+## Component 1: Moderator CLI (`moderator/`)
+
+### Purpose
+
+The moderator CLI runs a multi-turn inference session against a local Ollama instance. It presents a SQL problem and schema to the model, then prompts the human moderator to intervene at key reasoning steps. Moderator turns are stripped from the final training record — the saved record contains only the model's reasoning, as if the model produced it autonomously.
+
+### Workflow per Session
+
+```
+[problem + schema injected as system context]
+model → reasoning step 1
+[moderator prompt: "what does the intermediate result look like?"]
+model → intermediate schema description
+[moderator prompt: "what transformation is needed next?"]
+model → next reasoning step
+...
+model → final SQL
+[moderator approves, edits, or discards]
+[record saved to corpus/]
+```
+
+The moderator prompts are configurable templates defined in `src/prompt.ts`. They are never written to the corpus.
+
+### CLI Interface
+
+```
+Usage: sqllm-moderate [options]
+
+Options:
+  --problem <path>      path to a problem JSON file
+  --model <name>        ollama model name (default: from .env)
+  --session-id <id>     resume an incomplete session
+  --dry-run             run without saving to corpus
+  --help
+```
+
+The session is interactive. After each model response, the moderator chooses:
+
+- `[enter]` — accept the response and continue
+- `e` — open the response in $EDITOR before continuing
+- `m` — inject a moderator prompt (not saved to corpus)
+- `r` — retry the last model turn with a different temperature
+- `d` — discard this session entirely
+- `s` — save and close the session
+
+Multiple instances of the CLI can run simultaneously, each with a separate `--session-id`, writing to separate JSONL files that are merged at training time.
+
+### Ollama Integration
+
+The CLI communicates with Ollama via its HTTP API (`/api/chat`). The base URL is configurable via `.env`. Streaming responses are displayed token-by-token in the terminal.
+
+```
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5-coder:12b
+OLLAMA_TEMPERATURE=0.7
+OLLAMA_CONTEXT_LENGTH=8192
+```
+
+No Ollama SDK dependency — use native `fetch` against the REST API directly to minimize dependency surface.
+
+### Session State
+
+Incomplete sessions are written to `corpus/sessions/<session-id>.partial.json` after each turn so they can be resumed with `--session-id`. On save, the partial file is finalized and appended to the appropriate JSONL corpus file, then deleted.
+
+---
+
+## Component 2: Corpus Format
+
+### Problem File (`problems/*.json`)
+
+```json
+{
+  "id": "agg_granularity_001",
+  "category": "aggregation",
+  "subcategory": "granularity_collapse",
+  "difficulty": "intermediate",
+  "prompt": "Get the total progress in seconds per user per course.",
+  "schema": {
+    "tables": [
+      {
+        "name": "user_course_lesson_progress",
+        "columns": [
+          { "name": "id", "type": "bigint", "primary_key": true },
+          { "name": "user_id", "type": "bigint" },
+          { "name": "course_id", "type": "bigint" },
+          { "name": "lesson_id", "type": "bigint" },
+          { "name": "progress_seconds", "type": "integer" },
+          { "name": "created", "type": "timestamptz" }
+        ]
+      }
+    ],
+    "sample_rows": [
+      { "table": "user_course_lesson_progress", "rows": [] }
+    ]
+  },
+  "tags": ["cte", "max-before-sum", "multi-level-aggregation"]
+}
+```
+
+Categories are defined in `moderator/src/types.ts` as a string enum to keep the corpus consistent. Do not invent ad-hoc category strings.
+
+### Training Record (`corpus/*.jsonl`)
+
+One JSON object per line. Each record represents a complete, moderator-approved reasoning session.
+
+```json
+{
+  "id": "agg_granularity_001_20260228T143022Z",
+  "problem_id": "agg_granularity_001",
+  "recorded_at": "2026-02-28T14:30:22Z",
+  "model": "qwen2.5-coder:12b",
+  "turns": [
+    {
+      "role": "system",
+      "content": "..."
+    },
+    {
+      "role": "user",
+      "content": "..."
+    },
+    {
+      "role": "assistant",
+      "content": "..."
+    }
+  ],
+  "final_sql": "WITH\nuser_lesson_progress AS (...)\nSELECT ...",
+  "moderator_notes": "edited step 2 — model skipped grain identification",
+  "quality": "approved",
+  "edit_count": 1
+}
+```
+
+`quality` is one of: `approved`, `approved_edited`, `discarded`. Only `approved` and `approved_edited` records are used for training. `edit_count` tracks how many turns the moderator edited, which is useful for tracking model improvement over time (a declining edit count across sessions for a given problem category is a signal of convergence).
+
+### Corpus Portability
+
+The corpus is the primary long-term asset of this project — not the adapter weights, which are model-specific and non-transferable. The corpus must remain model-agnostic so that training records can be used against any base model, any size, any family.
+
+**Critical rule: never bake chat template tokens into stored corpus content.**
+
+Chat templates are model-family-specific serialization formats (e.g. `<|im_start|>user` for Qwen, `<start_of_turn>user` for Gemma). They must be applied at training time by the training pipeline, not at collection time by the moderator CLI. The corpus stores only raw role/content pairs.
+
+Correct stored turn:
+```json
+{ "role": "assistant", "content": "One row represents a single progress event..." }
+```
+
+Never store:
+```json
+{ "role": "assistant", "content": "<|im_start|>assistant\nOne row represents..." }
+```
+
+The training pipeline applies the correct chat template for the target model during dataset preprocessing. A `convert_corpus.py` utility should exist to validate that a corpus file contains no template tokens before training, and to reformat turn structures if targeting a model family with a structurally different template.
+
+Cross-model training (e.g. using the same corpus to fine-tune Gemma-3 or DeepSeek) requires only a template conversion step — the reasoning content transfers without modification. If using a secondary model to paraphrase assistant turns for cross-model distillation, validate a sample against the original reasoning structure before training. Paraphrasing must preserve logical step order and reasoning moves — only surface language should change.
+
+### JSONL File Naming
+
+```
+corpus/YYYY-MM-DD.jsonl        # daily accumulation file
+corpus/archive/YYYY-MM.jsonl   # monthly merged archive (generated by training pipeline)
+```
+
+The training pipeline always trains on the full corpus, not just new records.
+
+---
+
+## Component 3: Training Pipeline (`training/`)
+
+### Stack
+
+- **Python 3.11+**
+- **PyTorch** with ROCm backend (primary target: RX 9070 XT, gfx1201)
+- **PEFT** (Hugging Face) for LoRA
+- **Transformers** (Hugging Face)
+- **Datasets** (Hugging Face) for corpus loading
+- **Unsloth** — optional accelerator, guarded by a feature flag in `config/default.yaml`; enable only if ROCm support is confirmed stable for the target GPU
+
+### ROCm Notes
+
+The RX 9070 XT is RDNA 4 (gfx1201). ROCm support for gfx1201 may be immature depending on the ROCm version available at the time of setup. The training pipeline must detect the available backend at startup and report it clearly. If ROCm is unavailable or the device is not recognized, the pipeline should fail fast with an actionable error rather than silently falling back to CPU.
+
+```python
+# fail fast rather than silently degrade to cpu
+import torch
+if not torch.cuda.is_available():
+    raise RuntimeError("cuda/rocm not available — check ROCm installation and gfx1201 support")
+```
+
+Verify the ROCm version supports gfx1201 before committing to the toolchain. If ROCm is not stable for gfx1201 at setup time, training should be run on a cloud GPU (Lambda Labs, Vast.ai) with results pulled back locally for inference.
+
+### LoRA Configuration (defaults in `config/qwen_12b.yaml`)
+
+```yaml
+model: qwen2.5-coder:12b
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+training:
+  epochs: 3
+  batch_size: 2
+  gradient_accumulation_steps: 8
+  learning_rate: 2e-4
+  warmup_ratio: 0.03
+  lr_scheduler: cosine
+  max_seq_length: 8192
+  fp16: false
+  bf16: true           # bf16 preferred over fp16 on modern hardware
+
+corpus:
+  train_split: 0.9
+  eval_split: 0.1
+  min_quality: approved  # approved | approved_edited
+
+unsloth:
+  enabled: false       # enable only if rocm support confirmed
+```
+
+### Training Entrypoint
+
+```
+Usage: python train.py [options]
+
+Options:
+  --config <path>       yaml config file (default: config/qwen_12b.yaml)
+  --corpus-dir <path>   path to corpus directory (default: ../corpus)
+  --output-dir <path>   where to save adapter weights (default: ./output)
+  --resume              resume from last checkpoint
+  --dry-run             validate corpus and config without training
+```
+
+### Training on Full Corpus
+
+Every training run trains on the entire accumulated corpus, not just new records. This prevents catastrophic forgetting across problem categories. Incremental-only training is not supported and should not be added without careful consideration of this tradeoff.
+
+### Evaluation
+
+`evaluate.py` runs the current adapter against a held-out test set and reports:
+
+- Execution accuracy (does the SQL run and return correct results against a test database)
+- Edit distance from reference SQL (structural similarity)
+- Reasoning step count (does the model produce multi-step reasoning or collapse to direct output)
+- Per-category breakdown (aggregation, anti-join, temporal, etc.)
+
+A test database fixture must be maintained in `training/fixtures/` for execution accuracy testing. Schema and seed data should match the problem file definitions.
+
+---
+
+## Prompt Schema
+
+The user prompt is assembled from three blocks. Block order is randomized between `problem_first` (A→B→C) and `schema_first` (B→A→C). The dialect/context block always comes last. The randomization is logged in the corpus record so order effects can be analyzed over time. The intent is to prevent the model from developing a positional dependency on schema always appearing before or after the problem statement.
+
+### Block A — Problem Statement
+
+```xml
+<problem>
+For each user, calculate their total progress in seconds per course. A user watches
+lesson videos and their position is tracked continuously, producing many rows per
+lesson. Progress should reflect the furthest point reached in each lesson, not the
+sum of all tracking events.
+</problem>
+```
+
+### Block B — Schema
+
+```xml
+<schema>
+  <dialect>bigquery</dialect>
+  <dataset>learning_platform</dataset>
+  <objects>
+    <object>
+      <name>user_course_lesson_progress</name>
+      <type>table</type>
+      <description>tracks video playback position per user per lesson, one row per progress event</description>
+      <columns>
+        <column name="id"               type="INT64"      nullable="false" pk="true"  />
+        <column name="user_id"          type="INT64"      nullable="false"             />
+        <column name="course_id"        type="INT64"      nullable="false"             />
+        <column name="lesson_id"        type="INT64"      nullable="false"             />
+        <column name="progress_seconds" type="INT64"      nullable="false"             />
+        <column name="created"          type="TIMESTAMP"  nullable="false"             />
+      </columns>
+      <clustering_columns>user_id, course_id</clustering_columns>
+      <partition_column>created</partition_column>
+      <approximate_row_count>2400000000</approximate_row_count>
+    </object>
+    <object>
+      <name>user_course_lesson_progress_latest</name>
+      <type>view</type>
+      <description>convenience view returning the most recent progress row per user per lesson</description>
+      <columns>
+        <column name="user_id"          type="INT64"      nullable="false" />
+        <column name="course_id"        type="INT64"      nullable="false" />
+        <column name="lesson_id"        type="INT64"      nullable="false" />
+        <column name="progress_seconds" type="INT64"      nullable="false" />
+        <column name="created"          type="TIMESTAMP"  nullable="false" />
+      </columns>
+    </object>
+  </objects>
+</schema>
+```
+
+Views and tables are both represented as `<object>` elements and are generally queried identically. The `type` field distinguishes them — the model should be aware that views cannot be targets of `INSERT`, `UPDATE`, `DELETE`, or `CREATE OR REPLACE TABLE`. No other special treatment is needed.
+
+### Block C — Dialect and Constraints
+
+```xml
+<context>
+  <dialect>bigquery</dialect>
+  <writeable>false</writeable>
+  <schema_source>information_schema</schema_source>
+</context>
+```
+
+The primary dialect target is **BigQuery/GoogleSQL**. This reflects the production data warehouse and ensures reasoning traces develop consistent intuition around BigQuery-specific behaviors: `QUALIFY`, `ARRAY_AGG`, `STRUCT`, partitioning, clustering, `APPROX_COUNT_DISTINCT`, and the absence of some ANSI features. Dialect reasoning should emerge naturally from the traces rather than being enumerated in the system prompt.
+
+### INFORMATION_SCHEMA Extraction Query
+
+The following BigQuery query generates the raw data serialized into Block B. It covers columns, types, nullability, partition columns, clustering columns, and approximate row counts. Run with `@dataset` set to the target dataset name.
+
+```sql
+with
+columns as (
+    select
+        c.table_name,
+        c.table_schema,
+        t.table_type,
+        c.column_name,
+        c.data_type,
+        c.is_nullable,
+        c.ordinal_position
+    from `region-us`.INFORMATION_SCHEMA.COLUMNS c
+    join `region-us`.INFORMATION_SCHEMA.TABLES t
+        on c.table_schema = t.table_schema
+        and c.table_name = t.table_name
+    where c.table_schema = @dataset
+),
+
+partitions as (
+    select
+        table_name,
+        column_name as partition_column
+    from `region-us`.INFORMATION_SCHEMA.COLUMNS
+    where table_schema = @dataset
+        and is_partitioning_column = 'YES'
+),
+
+clustering as (
+    select
+        table_name,
+        string_agg(column_name order by clustering_ordinal_position) as clustering_columns
+    from `region-us`.INFORMATION_SCHEMA.COLUMNS
+    where table_schema = @dataset
+        and clustering_ordinal_position is not null
+    group by table_name
+),
+
+row_counts as (
+    select
+        table_name,
+        row_count as approximate_row_count
+    from `region-us`.INFORMATION_SCHEMA.PARTITIONS
+    where table_schema = @dataset
+        and partition_id = '__NULL__'
+    union all
+    select
+        table_name,
+        sum(row_count)
+    from `region-us`.INFORMATION_SCHEMA.PARTITIONS
+    where table_schema = @dataset
+        and partition_id != '__NULL__'
+    group by table_name
+)
+
+select
+    c.table_name,
+    c.table_type,
+    c.column_name,
+    c.data_type,
+    c.is_nullable,
+    c.ordinal_position,
+    p.partition_column,
+    cl.clustering_columns,
+    r.approximate_row_count
+from columns c
+left join partitions p on c.table_name = p.table_name
+left join clustering cl on c.table_name = cl.table_name
+left join row_counts r on c.table_name = r.table_name
+order by c.table_name, c.ordinal_position
+```
+
+### Token Budget
+
+A 6-column table block is approximately 200-300 tokens. A 4-5 table problem runs 800-1200 tokens for the schema block alone. At 8192 context length this leaves comfortable headroom for reasoning trace and SQL. For wide tables (20+ columns), strip columns irrelevant to the problem before serializing. Row counts and partition/clustering metadata should be retained even when trimming columns — they carry reasoning signal about scale and query cost that a good SQL thinker uses regardless of which columns are directly referenced.
+
+### Corpus Record — Prompt Metadata
+
+```json
+"prompt_config": {
+    "block_order": "problem_first",
+    "dialect": "bigquery",
+    "schema_source": "information_schema",
+    "writeable": false,
+    "objects_in_scope": ["user_course_lesson_progress", "user_course_lesson_progress_latest"]
+}
+```
+
+---
+
+## Inference Sources
+
+The moderator CLI supports multiple inference backends. The backend is selected per session via `--backend` flag or `INFERENCE_BACKEND` env var. All backends produce the same turn structure and write to the same corpus format — the backend is an implementation detail of the session runner, not of the corpus.
+
+### Backend: Ollama (default)
+
+Local inference via Ollama HTTP API. Used for the primary moderation workflow against the development model.
+
+```bash
+sqllm-moderate --problem problems/agg_granularity_001.json --backend ollama
+```
+
+Configured via:
+```bash
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5-coder:7b  # or :12b on production hardware
+```
+
+### Backend: Claude Code (`claude -p`)
+
+Claude Code's `-p` (`--print`) flag runs a single non-interactive inference call and exits, making it suitable for scripted session generation. This backend is used to generate high-quality reasoning traces via distillation — a more capable Claude model produces the reasoning, which is then used to train Qwen. This is cross-model distillation: the student (Qwen) learns reasoning patterns from a stronger teacher (Claude).
+
+Available models via `--model` flag:
+- `haiku` — fast and cheap, suitable for high-volume generation of straightforward problem types
+- `sonnet` — default recommendation, strong reasoning at moderate cost
+- `opus` — highest reasoning quality, use for complex problem types (recursive CTEs, schema smell, multi-level aggregation)
+
+```bash
+sqllm-moderate --problem problems/agg_granularity_001.json --backend claude --model sonnet
+```
+
+The CLI invokes Claude Code as a subprocess:
+
+```bash
+claude -p \
+  --model sonnet \
+  --output-format json \
+  --system-prompt "$(cat prompts/system.txt)" \
+  --max-turns 1
+```
+
+The problem and schema blocks are piped to stdin. The response is parsed from the JSON output's `result` field.
+
+**Important:** Claude Code must be authenticated (`claude login`) on the machine running the moderator. The `ANTHROPIC_API_KEY` env var is an alternative to interactive login. Costs are incurred per call at standard API rates — use `haiku` for volume generation and reserve `opus` for problem types where reasoning quality matters most.
+
+**Distillation note:** When using the Claude backend, the moderator's role shifts slightly. Claude's reasoning traces will reflect Claude's reasoning style, not Qwen's. The human moderator should evaluate whether each trace reflects the intended SQL reasoning methodology and edit where Claude's approach diverges from it before approving. The corpus records the final approved trace regardless of which model produced it — Qwen trains on the reasoning structure, not on Claude's specific phrasing.
+
+### Backend Selection Strategy
+
+| Situation | Recommended Backend |
+|---|---|
+| Daily moderation workflow | `ollama` — free, local, fast feedback loop |
+| Bootstrapping new problem categories | `claude --model sonnet` — strong cold-start reasoning |
+| Complex problem types (recursive, schema smell) | `claude --model opus` — highest ceiling |
+| High-volume generation for covered categories | `claude --model haiku` — cost-efficient at scale |
+| Testing pipeline and tooling | `ollama` with 1.5B model — no API cost |
+
+---
+
+## Base Model
+
+**Qwen2.5-Coder-12B** via Ollama for inference, Hugging Face for training.
+
+- Ollama tag: `qwen2.5-coder:12b`
+- HF repo: `Qwen/Qwen2.5-Coder-12B-Instruct`
+
+The model name is always read from config/env, never hardcoded. If a different base is evaluated, only the config changes.
+
+---
+
+## Problem Categories
+
+These are the SQL reasoning problem types the corpus should cover. New categories must be added to `moderator/src/types.ts` before use.
+
+| Category | Description |
+|---|---|
+| `aggregation.granularity_collapse` | must reduce grain before aggregating up |
+| `aggregation.multi_level` | more than two levels of aggregation |
+| `set.anti_join` | absence queries via NOT EXISTS or LEFT JOIN / IS NULL |
+| `set.difference` | EXCEPT or equivalent |
+| `set.intersection` | INTERSECT or equivalent |
+| `temporal.window` | window functions for time-based patterns |
+| `temporal.gap` | identifying gaps or missing intervals |
+| `temporal.running` | running totals, rolling aggregates |
+| `hierarchy.recursive` | recursive CTEs for tree structures |
+| `hierarchy.adjacency` | parent-child flattening |
+| `schema.smell` | identifying when the schema is the root problem |
+| `optimization.rewrite` | semantically equivalent but better-performing form |
+| `optimization.index_aware` | join/filter ordering with query plan awareness |
+| `pattern.deduplication` | removing or identifying duplicates with business logic |
+| `pattern.pivot` | row-to-column transformations |
+
+Coverage across all categories is more important than depth in any single category. Do not allow the corpus to become heavily skewed toward aggregation problems at the expense of others.
+
+---
+
+## Prompt Structure
+
+The system prompt establishes the model's role and reasoning disposition. It is defined in `moderator/src/prompt.ts` and is the same at inference time and training time.
+
+```
+You are a SQL reasoning engine. When given a problem and a schema, you think through 
+the problem step by step before writing any SQL. You identify the grain of each table, 
+consider what intermediate structures are needed, and reason about the shape of the data 
+at each transformation step. You write clean, idiomatic SQL. You never skip reasoning steps.
+```
+
+The system prompt is not a place to enumerate SQL syntax rules. It establishes a reasoning disposition, not a syntax guide.
+
+Moderator question templates (injected during data collection, stripped before saving) are defined separately in `prompt.ts` and organized by category. Examples:
+
+- "What is the grain of this table — what does one row represent?"
+- "What does the intermediate result look like after this step?"
+- "What would a naive query get wrong here, and why?"
+- "Is there a simpler way to express this that a query optimizer would handle better?"
+
+---
+
+## What This Project Is Not
+
+- **Not a general SQL assistant.** The model should refuse or gracefully decline topics outside SQL reasoning.
+- **Not a natural language generator.** Output is SQL, with only enough English in the reasoning trace to explain transformation choices. Responses are not prose.
+- **Not a query runner.** The model has no database connection at inference time. Schema context is injected via the prompt (RAG/MCP at a later phase — not in scope for initial build).
+- **Not multi-lingual.** English only for the initial build. The architecture should not assume this is permanent, but no localization work is in scope now.
+
+---
+
+## Open Items (to be defined and documented here)
+
+- [ ] Problem file generation workflow — how to convert existing SQL files into structured problem JSON
+- [ ] Corpus format for CTE-broken reasoning (multi-step problems split at CTE boundaries)
+- [ ] MCP/RAG integration for schema injection at inference time (post-MVP)
+- [ ] Ollama model quantization target for RX 9070 XT (Q4_K_M vs Q5_K_M — benchmark both)
+- [ ] Cloud training fallback procedure if ROCm gfx1201 support is insufficient
+- [ ] Adapter merging strategy for periodic full-model checkpoints
+
+---
+
+## Nvidia to AMD Transition
+
+### Current State: GTX 1080 Test Environment
+
+The workflow is currently being developed and validated on an Nvidia GTX 1080 (8GB GDDR5X, Pascal/sm_61, CUDA). This is a temporary environment for testing the moderator CLI, corpus tooling, and training pipeline end-to-end before the production GPU is available. Model quality and training outcomes on this hardware are not representative of the production target.
+
+**Active constraints on the 1080:**
+
+- No bfloat16 — Pascal does not support it. Use `fp16: true`, `bf16: false` in config.
+- 8GB VRAM cap — inference testing uses `qwen2.5-coder:7b` at Q4_K_M (~4.5GB). Training pipeline validation uses `qwen2.5-coder:1.5b` to fit within VRAM with headroom for gradients.
+- Batch size reduced to 1 with gradient accumulation steps increased to 16 to compensate.
+
+**What is being validated on the 1080:**
+
+- Moderator CLI session flow, injection, editing, and discard
+- Session resume via partial files
+- Corpus JSONL writing, format correctness, and atomic writes
+- Multi-session parallelism
+- Training pipeline end-to-end execution without errors
+- Eval script execution against held-out test set
+
+**What is not being validated on the 1080:**
+
+- 12B model response quality and prompt structure compatibility
+- Meaningful behavioral shift from training
+- ROCm toolchain and gfx1201 support
+
+### Target State: RX 9070 XT Production Environment
+
+The production target is an AMD RX 9070 XT (16GB GDDR6, RDNA 4, gfx1201) running Ollama as a remote inference server. When this GPU is available, the following changes will need to be made — **do not make these changes until explicitly asked:**
+
+- Switch Ollama from local to remote — the CLI will need `OLLAMA_BASE_URL` pointed at the remote server's address rather than localhost
+- Switch training config from `fp16` to `bf16`
+- Restore `batch_size: 2` and `gradient_accumulation_steps: 8`
+- Switch base model to `qwen2.5-coder:12b` for both inference and training
+- Verify ROCm version supports gfx1201 before enabling the training pipeline — if ROCm support is insufficient, training runs on a cloud GPU with the corpus and adapter synced back locally
+- Update `OLLAMA_MODEL` in `.env` to the 12B tag
+
+The `train.py` ROCm/CUDA detection logic does not change — it fails fast on either platform if the GPU is not recognized, which is the correct behavior on both.
+
+### Environment Configuration
+
+`.env.example` must include both environment profiles clearly commented:
+
+```bash
+# --- inference ---
+OLLAMA_BASE_URL=http://localhost:11434   # gtx 1080 local
+# OLLAMA_BASE_URL=http://192.168.x.x:11434  # rx 9070 xt remote — update when available
+OLLAMA_MODEL=qwen2.5-coder:7b           # gtx 1080 test model
+# OLLAMA_MODEL=qwen2.5-coder:12b        # rx 9070 xt production model
+
+# --- training ---
+# bf16=false, fp16=true for gtx 1080 (pascal — no bf16 support)
+# bf16=true, fp16=false for rx 9070 xt
+```
+
+---
+
+## Development Notes for Claude Code
+
+- TypeScript in `moderator/` — strict mode, no `any`, prefer `unknown` with type guards
+- Python in `training/` — type hints on all function signatures, no bare `except`
+- Dependencies should be minimal and pinned. Prefer standard library where it suffices.
+- The corpus is the most valuable artifact in this project. Any code that writes to `corpus/` must be reviewed carefully. Writes should be atomic (write to temp, rename) to prevent partial records on crash.
+- Do not add a web server, REST API, or database. If a future phase requires one, it will be added as a separate component with a separate decision.
+- CLI flags take precedence over `.env`, which takes precedence over config file defaults. This order must be consistent across all tools.

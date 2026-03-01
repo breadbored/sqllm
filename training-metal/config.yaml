@@ -1,0 +1,56 @@
+# Metal/MPS fork — Qwen2.5-Coder-7B at float16.
+# Production ROCm run uses Qwen3.5-27B with QLoRA (see ../training/).
+#
+# Memory budget on Apple Silicon (unified memory):
+#   7B float16 weights:    ~14 GB
+#   LoRA adapters + opt:   ~0.5 GB
+#   Activations (seq 2048): ~2-3 GB
+#   Total:                 ~17-18 GB
+# Fits on 18 GB M3 Pro (tight) or 36 GB M3 Max (comfortable).
+# For a quick smoke-test on 16 GB, switch model_name to
+#   Qwen/Qwen2.5-Coder-1.5B  (~3 GB float16, trivially fits).
+
+model_name: Qwen/Qwen2.5-Coder-1.5B
+data_path: data/training_data.jsonl
+output_dir: output/qwen25-1b5-sqllm-metal
+
+# bitsandbytes 4-bit quantization is not supported on Apple MPS.
+# The model is loaded in float16; LoRA adapter weights stay in float32.
+load_in_4bit: false
+
+# lora settings
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+
+# training settings
+max_seq_length: 2048
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+
+# Epochs
+num_train_epochs: 5 # for low sample counts
+# num_train_epochs: 3 # for high sample counts
+
+# Learning Rate
+learning_rate: 5.0e-5 # conservative
+# learning_rate: 2.0e-4 # aggressive
+
+warmup_ratio: 0.05
+lr_scheduler_type: cosine
+save_steps: 50
+logging_steps: 10
+bf16: false # MPS does not support bfloat16
+fp16: false # adapter weight updates run in float32 for numerical stability
+gradient_checkpointing: true # trade ~30% compute for ~half activation memory; required for 7B
+
+# eval split — held out from training, used for loss monitoring
+eval_split: 0.1

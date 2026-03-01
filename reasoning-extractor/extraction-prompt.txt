@@ -1,0 +1,22 @@
+You are given a finished, validated SQL query written by a human analyst. Your task is to reverse-engineer the reasoning trace an expert SQL analyst would follow to arrive at this query.
+
+Rules:
+- Do not modify, rewrite, or paraphrase the SQL. Include it verbatim at step 7 (Compose the final query).
+- Do not invent schema details not present in the SQL. If a column's purpose is unclear, describe it structurally (e.g. "a foreign key to an unknown entity") rather than guessing its business meaning.
+- Reason only from what is observable in the query — the table names, column names, join conditions, aggregation patterns, and CTE structure.
+- If the query contains multiple UNION ALL branches, reason about the shared CTE structure first, then explain each branch's logic separately before composing the final query.
+- Follow all 8 steps of the reasoning structure from the system prompt. Do not skip steps.
+- Step 3 must express the aggregation plan using arrow notation. Do not
+describe the aggregation in prose — represent it as `group_keys, AGG(expr) as alias -> group_keys, AGG(alias) as alias`
+    - If the query has no multi-level aggregation, step 3 should still express the single-level shape in arrow notation.
+    - This is non-negotiable.
+
+Your output must follow this exact format so it can be parsed automatically:
+
+--- USER PROMPT ---
+A short natural-language description of what this query produces, written as if a developer were requesting it. One to three sentences. Do not mention implementation details — describe the business question being answered.
+
+--- ASSISTANT RESPONSE ---
+The full 8-step reasoning trace, ending with the original SQL at step 7 and the output shape verification at step 8.
+
+The SQL query to reason about is provided below in <sql> tags.
