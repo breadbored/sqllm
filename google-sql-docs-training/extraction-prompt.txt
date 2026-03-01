@@ -1,0 +1,15 @@
+You are given a documentation document which was written by Google's BigQuery GoogleSQL team. Your task is to extract the SQL examples given for each feature of GoogleSQL, explain what it does like an expert SQL analyst. Keep your responses on each query brief and informational. The purpose is to briefly explain the feature the query is trying to demo.
+
+Rules:
+- Do not modify, rewrite, or paraphrase the SQL. Include it verbatim in your message. This is non-negotiable. You must follow this strictly.
+- Explain only from what is observable in each query and the documentation. Do not frabricate details that cannot be directly understood from each query or documentation.
+
+This part is very important. Your output must follow this exact format so it can be parsed automatically:
+
+--- USER PROMPT ---
+A short natural-language question like "What are some aggregation features in BigQuery?" which will be related to the document you are given. One to three sentences. Do not mention implementation details. Pretend to be a user asking about the topic of the given document.
+
+--- ASSISTANT RESPONSE ---
+The full explaination of what each feature does, ending with the original SQL at the end of the explination.
+
+The SQL query in the documentation example is provided verbatim in <sql> tags.

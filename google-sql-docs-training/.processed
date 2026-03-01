@@ -311,3 +311,8 @@ stg_user_lab_usage.sqlx
 stg_users.sqlx
 stg_videos.sqlx
 stg_watchlist.sqlx
+aggregate-dp-functions.md
+aggregate-function-calls.md
+aggregate_functions.md
+approximate_aggregate_functions.md
+array_functions.md
