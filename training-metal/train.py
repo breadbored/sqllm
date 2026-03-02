@@ -1,14 +1,7 @@
 """
-train.py — LoRA fine-tuning of Qwen2.5-Coder-7B on SQLLM reasoning traces.
-
 Usage:
     python train.py --config config.yaml
     python train.py --config config.yaml --dry-run   # validate data only
-
-Hardware target: Apple Silicon (M3 Pro/Max) via Metal/MPS
-4-bit QLoRA is not available on MPS — the model is loaded in float16 and
-trained with standard LoRA. Adapter weight updates run in float32.
-Expected peak unified memory: ~17-18 GB for the 7B model at seq_len 2048.
 """
 
 from __future__ import annotations
@@ -33,8 +26,7 @@ def load_config(path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def detect_device() -> str:
-    """Return the best available compute device: mps, cuda, or cpu."""
+def detect_device() -> str:Return the best available compute device: mps, cuda, or cpu.
     import torch
     if torch.cuda.is_available():
         return "cuda"
@@ -61,10 +53,6 @@ def build_lora_config(cfg: dict):
 
 
 def load_dataset_from_jsonl(data_path: str, eval_ratio: float, script_dir: Path):
-    """
-    Load, validate, and split the JSONL training data.
-    Returns (train_records, eval_records) as lists of message dicts.
-    """
     sys.path.insert(0, str(script_dir))
     from corpus_utils import iter_records, split_records, record_to_messages
 
@@ -86,11 +74,6 @@ def load_dataset_from_jsonl(data_path: str, eval_ratio: float, script_dir: Path)
 
 
 def messages_to_hf_dataset(messages_list: list[list[dict]], tokenizer, max_seq_length: int):
-    """
-    Apply the chat template and tokenise each conversation.
-    Returns a HuggingFace Dataset with 'input_ids' and 'labels' columns.
-    Labels are set to -100 for all non-assistant tokens (instruction masking).
-    """
     from datasets import Dataset
 
     def apply_template(messages: list[dict]) -> dict:
