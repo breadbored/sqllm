@@ -26,7 +26,7 @@ def load_config(path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def detect_device() -> str:Return the best available compute device: mps, cuda, or cpu.
+def detect_device() -> str:
     import torch
     if torch.cuda.is_available():
         return "cuda"
