@@ -1,15 +1,27 @@
-You are given a documentation document which was written by Google's BigQuery GoogleSQL team. Your task is to extract the SQL examples given for each feature of GoogleSQL, explain what it does like an expert SQL analyst. Keep your responses on each query brief and informational. The purpose is to briefly explain the feature the query is trying to demo.
+You are given a GoogleSQL documentation page. It may contain one or many distinct SQL examples. Your task is to produce one training record per SQL example found in the document.
 
-Rules:
-- Do not modify, rewrite, or paraphrase the SQL. Include it verbatim in your message. This is non-negotiable. You must follow this strictly.
-- Explain only from what is observable in each query and the documentation. Do not frabricate details that cannot be directly understood from each query or documentation.
+For each SQL example, output a USER PROMPT / ASSISTANT RESPONSE pair using exactly the format described below. If the document contains five examples, output five pairs. If it contains one, output one.
 
-This part is very important. Your output must follow this exact format so it can be parsed automatically:
+---
+
+OUTPUT FORMAT (repeat once per SQL example):
 
 --- USER PROMPT ---
-A short natural-language question like "What are some aggregation features in BigQuery?" which will be related to the document you are given. One to three sentences. Do not mention implementation details. Pretend to be a user asking about the topic of the given document.
+A short, specific natural-language question (one to two sentences) that a developer would ask to arrive at this particular query. The question must be specific to this example — not a general question about the whole document. Do not mention implementation details like function signatures or clause names in the question. Write it as if a developer is asking for help with a concrete task.
 
 --- ASSISTANT RESPONSE ---
-The full explaination of what each feature does, ending with the original SQL at the end of the explination.
+A concise explanation (one to three sentences) of what this specific query does and why it is structured this way, followed by the SQL query reproduced verbatim. The explanation must describe only what is directly observable from the query and the documentation. End the response with the SQL inside a googlesql code fence, exactly as written in the documentation — do not alter it in any way.
 
-The SQL query in the documentation example is provided verbatim in <sql> tags.
+---
+
+RULES:
+
+1. Produce exactly one USER PROMPT / ASSISTANT RESPONSE block per SQL example. Do not merge multiple examples into one block.
+2. Each block must be self-contained. Do not refer to other examples or use phrases like "as shown above" or "similarly".
+3. The SQL in every ASSISTANT RESPONSE must be reproduced verbatim — no reformatting, no reordering, no paraphrasing.
+4. The USER PROMPT must be specific to that single example. Do not write a generic question about the topic of the whole document.
+5. Do not explain examples you cannot see. If a section references behavior without a query, skip it.
+6. Do not add commentary after the final block. Output ends after the last ASSISTANT RESPONSE.
+7. Use exactly the delimiter text shown above: `--- USER PROMPT ---` and `--- ASSISTANT RESPONSE ---` on their own lines, with no extra characters.
+
+The documentation is provided below in <doc> tags.

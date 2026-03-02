@@ -210,7 +210,7 @@ async function main(): Promise<void> {
       const rawContent = fs.readFileSync(absPath, "utf-8");
       const sqlContent = stripConfigBlock(rawContent);
 
-      const userPrompt = `${extractionPrompt}\n\n<sql>\n${sqlContent}\n</sql>`;
+      const userPrompt = `${extractionPrompt}\n\n<doc>\n${sqlContent}\n</doc>`;
       const response = callClaude(userPrompt);
       const pairs = parseResponse(response);
 
