@@ -1,0 +1,11 @@
+@import "../../styles/tokens.css";
+@import "tailwindcss";
+
+/* Scan the doriath component source for Tailwind utility classes */
+@source "../../src";
+
+body {
+  background-color: var(--color-moria-900);
+  color: var(--color-moria-300);
+  font-family: var(--font-sans);
+}

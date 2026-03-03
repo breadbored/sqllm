@@ -1,0 +1,98 @@
+@theme {
+  /* Pine/off-white light base — 900=background, 300=text */
+  --color-moria-900: #f4efe4;  /* warm off-white page bg */
+  --color-moria-800: #ece5d5;  /* card / panel bg */
+  --color-moria-700: #d7ceba;  /* borders, dividers */
+  --color-moria-600: #b0a490;  /* muted borders */
+  --color-moria-500: #857869;  /* muted / placeholder text */
+  --color-moria-400: #5a4e42;  /* secondary text */
+  --color-moria-300: #2a2118;  /* primary text */
+
+  /* Sage green — deepened for contrast on light bg */
+  --color-accent: #5f8a56;
+  --color-accent-hover: #4e7846;
+
+  /* Lift semantics — sage / taupe / amber / terracotta */
+  --color-lift-positive: #5f8a56;
+  --color-lift-neutral: #857869;
+  --color-lift-warning: #c08a2a;
+  --color-lift-warning-shadow: #8f6420;
+  --color-lift-negative: #a8572e;
+  --color-lift-negative-shadow: #7e4122;
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Skeleton shimmer */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-moria-700) 25%,
+    var(--color-moria-600) 50%,
+    var(--color-moria-700) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+/* Slider — hide native thumb, draw custom */
+.moria-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+}
+.moria-range:disabled { cursor: not-allowed; opacity: 0.4; }
+.moria-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid var(--color-moria-800);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  cursor: pointer;
+}
+.moria-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid var(--color-moria-800);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  cursor: pointer;
+}
+
+/* Date input — hide browser calendar icon; we render our own */
+input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0; width: 0; padding: 0; margin: 0; }
+
+/* Progress bar indeterminate */
+@keyframes progress-indeterminate {
+  0%   { left: -45%; width: 45%; }
+  60%  { left: 100%; width: 45%; }
+  100% { left: 100%; width: 45%; }
+}
+.progress-indeterminate {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  animation: progress-indeterminate 1.5s ease-in-out infinite;
+}
