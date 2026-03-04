@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
   const apiUrl =
     process.env.SQLLM_API_URL ??
-    "http://100.123.65.9:11434/v1/chat/completions";
+    "http://192.168.50.247:11434/v1/chat/completions";
   const apiKey = process.env.SQLLM_API_KEY ?? "ollama";
   const model = "sqllm"; // process.env.SQLLM_MODEL ?? "sqllm";
 
@@ -56,11 +56,13 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to connect to model API";
+    console.log(err as Error);
     return new Response(
       JSON.stringify({
         type: "error",
         message,
         where: "Failed in a try/catch",
+        error: err as Error,
       }) + "\n",
       {
         status: 502,

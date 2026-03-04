@@ -104,7 +104,7 @@ Multiple instances of the CLI can run simultaneously, each with a separate `--se
 The CLI communicates with Ollama via its HTTP API (`/api/chat`). The base URL is configurable via `.env`. Streaming responses are displayed token-by-token in the terminal.
 
 ```
-OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_BASE_URL=http://192.168.50.247:11434
 OLLAMA_MODEL=qwen2.5-coder:12b
 OLLAMA_TEMPERATURE=0.7
 OLLAMA_CONTEXT_LENGTH=8192
@@ -485,7 +485,7 @@ sqllm-moderate --problem problems/agg_granularity_001.json --backend ollama
 
 Configured via:
 ```bash
-OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_BASE_URL=http://192.168.50.247:11434
 OLLAMA_MODEL=qwen2.5-coder:7b  # or :12b on production hardware
 ```
 
@@ -572,9 +572,9 @@ Coverage across all categories is more important than depth in any single catego
 The system prompt establishes the model's role and reasoning disposition. It is defined in `moderator/src/prompt.ts` and is the same at inference time and training time.
 
 ```
-You are a SQL reasoning engine. When given a problem and a schema, you think through 
-the problem step by step before writing any SQL. You identify the grain of each table, 
-consider what intermediate structures are needed, and reason about the shape of the data 
+You are a SQL reasoning engine. When given a problem and a schema, you think through
+the problem step by step before writing any SQL. You identify the grain of each table,
+consider what intermediate structures are needed, and reason about the shape of the data
 at each transformation step. You write clean, idiomatic SQL. You never skip reasoning steps.
 ```
 
@@ -655,7 +655,7 @@ The `train.py` ROCm/CUDA detection logic does not change — it fails fast on ei
 
 ```bash
 # --- inference ---
-OLLAMA_BASE_URL=http://localhost:11434   # gtx 1080 local
+OLLAMA_BASE_URL=http://192.168.50.247:11434   # gtx 1080 local
 # OLLAMA_BASE_URL=http://192.168.x.x:11434  # rx 9070 xt remote — update when available
 OLLAMA_MODEL=qwen2.5-coder:7b           # gtx 1080 test model
 # OLLAMA_MODEL=qwen2.5-coder:12b        # rx 9070 xt production model

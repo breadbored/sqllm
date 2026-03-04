@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBigQueryClient } from "@/lib/bigquery";
 import { toTableColumns } from "@/lib/schema";
 import type { TableRow } from "@/lib/types";
+import { TableInformationSchema } from "@/types/tables";
 
 /**
  * GET /api/schema?table=<name>
@@ -13,7 +14,10 @@ export async function GET(req: NextRequest) {
   const table = req.nextUrl.searchParams.get("table");
 
   if (!table) {
-    return NextResponse.json({ error: "table param required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "table param required" },
+      { status: 400 },
+    );
   }
 
   const bigquery = getBigQueryClient();
@@ -44,22 +48,18 @@ export async function GET(req: NextRequest) {
     GROUP BY project_id, dataset_id, table_name
   `;
 
-  const [rows] = await bigquery.query({ query, params: { table } });
-
-  if (rows.length === 0) {
-    // Return close matches so the model can self-correct
-    const [allRows] = await bigquery.query({
-      query: `
-        SELECT DISTINCT table_name
-        FROM dev_staging.INFORMATION_SCHEMA.COLUMNS
-        WHERE LOWER(table_name) LIKE @pattern
-        LIMIT 10
-      `,
-      params: { pattern: `%${table.slice(0, 5).toLowerCase()}%` },
+  const [data] = await bigquery.query({ query, params: { table } });
+  const rows = (data as Array<TableInformationSchema>).map((row) => {
+    row.table_columns = row.table_columns.map((col) => {
+      if (typeof col === "string") {
+        return JSON.parse(col);
+      }
+      return col;
     });
-    const suggestions = (allRows as Array<{ table_name: string }>).map((r) => r.table_name);
-    return NextResponse.json({ error: "not_found", suggestions }, { status: 404 });
-  }
+    return row;
+  });
+
+  console.log("[DEBUG]", rows);
 
   const columns = toTableColumns((rows[0] as TableRow).table_columns);
   return NextResponse.json(columns);

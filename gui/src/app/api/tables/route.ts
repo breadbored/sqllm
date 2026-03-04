@@ -49,6 +49,8 @@ export async function GET(req: NextRequest) {
   const [rows] = await bigquery.query({ query });
   const data = rows as Array<TableInformationSchema>;
 
+  console.log("[DEBUG]", data);
+
   const results =
     q && q !== "" ? data.filter((t) => t.table_name.includes(q)) : data;
 
