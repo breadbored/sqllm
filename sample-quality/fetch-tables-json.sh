@@ -1,0 +1,17 @@
+curl 'http://localhost:3001/api/tables?q=' \
+  -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:148.0) Gecko/20100101 Firefox/148.0' \
+  -H 'Accept: */*' \
+  -H 'Accept-Language: en-GB,en-US;q=0.9,en-AU;q=0.8,en-CA;q=0.7,en;q=0.6,en-ZW;q=0.5,en-TT;q=0.4,en-ZA;q=0.3,en-PH;q=0.2,en-NZ;q=0.1,en-IE;q=0.1,en-JM;q=0.1,en-BZ;q=0.1' \
+  -H 'Accept-Encoding: gzip, deflate, br, zstd' \
+  -H 'Referer: http://localhost:3001/' \
+  -H 'DNT: 1' \
+  -H 'Sec-GPC: 1' \
+  -H 'Connection: keep-alive' \
+  -H 'Cookie: dpevent-video=%7B%22session_id%22%3A%22019cb4b0-a202-7753-b69d-1a412ddbfab7%22%7D; dpevent=%7B%22session_id%22%3A%22019cb4b0-a202-7753-b69d-1a412ddbfab7%22%7D; dpevent-page=%7B%22path%22%3A%22%2F%22%2C%22title%22%3A%22Developers%20Alliance%20-%20Shaping%20the%20Future%20of%20Innovation%22%2C%22path_with_params%22%3A%22http%3A%2F%2Flocalhost%3A3000%2F%22%2C%22user_agent%22%3A%22Mozilla%2F5.0%20(Macintosh%3B%20Intel%20Mac%20OS%20X%2010.15%3B%20rv%3A135.0)%20Gecko%2F20100101%20Firefox%2F135.0%22%7D; sidebar_state=true; __next_hmr_refresh_hash__=d448ce5829d09fbc16e473e66dc09c8c633457081244afec; __Host-next-auth.csrf-token=17fb12fa2d0ef6de17b021fddfc3cb9c1d7b974a7f714c3f1aa89cd6f2734ad1%7Cdd7352e401a7dff5e3093f54cba07bbd43c0422bad33720a0159d55d5c661551; __Secure-next-auth.callback-url=https%3A%2F%2Flocalhost%3A4022; dataProtocolCookies-0.0.37=false; developersAllianceCookies-0.0.1-release=false; _session.legacy=2w_konPAouzsedFKNnAKa; _session.legacy.sig=LhRZxsExn-6gvduFfVNflX_thpo' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'Priority: u=4' \
+  -H 'Pragma: no-cache' \
+  -H 'Cache-Control: no-cache' \
+  --output buckets-tables.json
